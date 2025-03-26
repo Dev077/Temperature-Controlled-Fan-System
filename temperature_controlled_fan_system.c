@@ -34,7 +34,7 @@ float current_temperature = 0.0; // variable to monitor the current temperature
 float threshold_temperature = 25.0;  // Default threshold in Celsius(we can change this upon our requirements)
 bool fan_state = false; 
 int fan_speed = 0;  // 0-100 percentage
-//bool auto_mode = true; 
+bool auto_mode = true; 
 
 // 7-segment display patterns for digits 0-9
 const unsigned char seven_seg_digits_decode[10] = {
@@ -109,7 +109,7 @@ int read_temperature(void) {
 }
 
 void set_fan_status(bool status) {
-    fan_status = status;
+    fan_state = status;
     
     // Use LED0 to indicate fan status (ON/OFF)
     if (status) {
