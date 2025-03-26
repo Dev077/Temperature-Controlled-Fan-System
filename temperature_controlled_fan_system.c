@@ -44,11 +44,11 @@ const unsigned char seven_seg_digits_decode[10] = {
 // Function prototypes
 void initialize_hardware(void); //function to initialize the hardware
 void cleanup_hardware(void); //function to cleanup the memory mapping
-int read_temperature(void);
-void set_fan_status(bool status);
-void update_fan_speed(int temp, int threshold);
-void update_displays(void);
-void process_user_input(void);
+int read_temperature(void); //function for temperature sensing
+void set_fan_status(bool status); //function for turning on/off the fan
+void update_fan_speed(int temp, int threshold); // function for fan speed control
+void update_displays(void); //function to update the 7-segment displays
+void process_user_input(void); //function to process user input
 
 void initialize_hardware(void) {
     int fd;
@@ -106,4 +106,44 @@ int read_temperature(void) {
     int temperature = (adc_value * 100) / 4095;
     
     return temperature;
+}
+
+void set_fan_status(bool status) {
+    fan_status = status;
+    
+    // Use LED0 to indicate fan status (ON/OFF)
+    if (status) {
+        *led_ptr |= 0x1;  // Turn on LED0
+    } else {
+        *led_ptr &= ~0x1; // Turn off LED0
+    }
+}
+
+void update_fan_speed(int temp, int threshold) {
+    if (!auto_mode) return; // Do nothing if not in auto mode
+    
+    if (temp >= threshold) {
+        // Turn fan on if temperature is above threshold
+        set_fan_status(true);
+        
+        // Calculate fan speed based on how much temperature exceeds threshold
+        int temp_diff = temp - threshold;
+        // Map excess temperature to fan speed (0-100%)
+        fan_speed = (temp_diff > 20) ? 100 : (temp_diff * 5);
+        
+        // Represent fan speed using LEDs 1-9 (LED0 is for fan status)
+        unsigned int led_pattern = 0;
+        for (int i = 0; i < (fan_speed / 10); i++) {
+            led_pattern |= (1 << (i + 1));
+        }
+        *led_ptr = (*led_ptr & 0x1) | led_pattern; // Keep LED0 status
+    } else {
+        // If temperature falls 2 degrees below threshold, turn fan off
+        if (temp < (threshold - 2)) {
+            set_fan_status(false);
+            fan_speed = 0;
+            *led_ptr &= 0x1; // Keep only LED0 status
+        }
+        // Otherwise keep current status
+    }
 }
