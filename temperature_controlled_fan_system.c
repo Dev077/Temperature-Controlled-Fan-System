@@ -225,3 +225,31 @@ void process_user_input(void) {
         }
     }
 }
+
+int main(void) {
+    // Initialize hardware
+    initialize_hardware();
+    
+    // Main control loop
+    while (1) {
+        // Read temperature from ADC
+        current_temperature = read_temperature();
+        
+        // Process user input
+        process_user_input();
+        
+        // Update fan status based on temperature and threshold
+        update_fan_speed(current_temperature, threshold_temperature);
+        
+        // Update displays
+        update_displays();
+        
+        // Short delay
+        usleep(200000); // small delay (200ms) to prevent excessive polling
+    }
+    
+    // Clean up (this won't be reached in this example)
+    cleanup_hardware();
+    
+    return 0;
+}
