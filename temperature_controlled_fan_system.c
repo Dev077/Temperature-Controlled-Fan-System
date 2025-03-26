@@ -17,7 +17,7 @@
 #define HEX3_HEX0_BASE 0x00000020
 #define HEX5_HEX4_BASE 0x00000030
 #define ADC_BASE 0x00000100
-#define PWM_BASE 0x00000200  // Hypothetical PWM controller address(need to discuss if we still want this)
+//#define PWM_BASE 0x00000200  // Hypothetical PWM controller address(for full hardware implementation)
 
 // Global pointers for memory-mapped I/O
 void *virtual_base; //base pointer for our memory-mapped region.
@@ -145,5 +145,83 @@ void update_fan_speed(int temp, int threshold) {
             *led_ptr &= 0x1; // Keep only LED0 status
         }
         // Otherwise keep current status
+    }
+}
+
+void update_displays(void) {
+    // Display current temperature on HEX1-HEX0
+    int temp_ones = ((int)current_temperature) % 10;
+    int temp_tens = ((int)(current_temperature / 10)) % 10;
+    unsigned int temp_display = (seven_seg_digits_decode[temp_tens] << 8) | seven_seg_digits_decode[temp_ones];
+    
+    // Display threshold temperature on HEX3-HEX2
+    int thresh_ones = ((int)threshold_temperature) % 10;
+    int thresh_tens = ((int)(threshold_temperature / 10)) % 10;
+    unsigned int thresh_display = (seven_seg_digits_decode[thresh_tens] << 24) | (seven_seg_digits_decode[thresh_ones] << 16);
+    
+    // Update the displays
+    *HEX3_HEX0_ptr = temp_display | thresh_display;
+    
+    // Display fan status and speed on HEX5-HEX4
+    int fan_tens = fan_speed / 10;
+    int fan_ones = fan_speed % 10;
+    
+    // If fan is off, show "OF"
+    if (!fan_state) {
+        // "OF" for Off (HEX5-HEX4)
+        *HEX5_HEX4_ptr = 0x3F5C; // 'O' and 'F'
+    } else {
+        // Show fan speed percentage
+        *HEX5_HEX4_ptr = (seven_seg_digits_decode[fan_tens] << 8) | seven_seg_digits_decode[fan_ones];
+    }
+}
+
+void process_user_input(void) {
+    // Read switch values
+    unsigned int sw_value = *sw_ptr;
+    
+    // Use switches to set temperature threshold (SW4-SW0)
+    int new_threshold = sw_value & 0x1F; // Use lower 5 bits for values 0-31
+    if (new_threshold != 0) { // Avoid threshold of 0
+        threshold_temperature = new_threshold;
+    }
+    
+    // Use SW9 to toggle auto/manual mode
+    auto_mode = !(sw_value & 0x200); // SW9 = 1: manual mode, SW9 = 0: auto mode
+    
+    // Use push buttons for manual control
+    unsigned int key_value = *key_ptr;
+    if (!auto_mode) {
+        // KEY0: Turn fan on
+        if (key_value & 0x1) {
+            set_fan_status(true);
+        }
+        
+        // KEY1: Turn fan off
+        if (key_value & 0x2) {
+            set_fan_status(false);
+        }
+        
+        // KEY2: Increase fan speed
+        if (key_value & 0x4) {
+            fan_speed = (fan_speed >= 100) ? 100 : fan_speed + 10;
+            // Update LEDs to show fan speed
+            unsigned int led_pattern = 0;
+            for (int i = 0; i < (fan_speed / 10); i++) {
+                led_pattern |= (1 << (i + 1));
+            }
+            *led_ptr = (*led_ptr & 0x1) | led_pattern; // Keep LED0 status
+        }
+        
+        // KEY3: Decrease fan speed
+        if (key_value & 0x8) {
+            fan_speed = (fan_speed <= 0) ? 0 : fan_speed - 10;
+            // Update LEDs to show fan speed
+            unsigned int led_pattern = 0;
+            for (int i = 0; i < (fan_speed / 10); i++) {
+                led_pattern |= (1 << (i + 1));
+            }
+            *led_ptr = (*led_ptr & 0x1) | led_pattern; // Keep LED0 status
+        }
     }
 }
