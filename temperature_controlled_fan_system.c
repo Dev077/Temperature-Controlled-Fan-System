@@ -7,21 +7,22 @@
 #include <sys/mman.h>
 
 // Memory mapping addresses for DE10-Standard
-#define LW_BRIDGE_BASE 0xFF200000
-#define LW_BRIDGE_SPAN 0x00200000
+#define LW_BRIDGE_BASE 0xFF200000 //communication bridge between the Hard Processor System (HPS) and the peripherals (such as GPIO, timers, and memory-mapped registers) that are mapped into the FPGA fabric.
+#define LW_BRIDGE_SPAN 0x00200000 //the size of the memory region we need to map
 
 // Hardware component addresses (offsets from base)(also need to double check if they're correct)
-#define LED_BASE 0x00000000
-#define SW_BASE 0x00000040
-#define KEY_BASE 0x00000050
-#define HEX3_HEX0_BASE 0x00000020
-#define HEX5_HEX4_BASE 0x00000030
-#define ADC_BASE 0x00000100
+#define LED_BASE 0x00000000 // LED's are used for visual feedback and fan status indication
+#define SW_BASE 0x00000040 //Switched for user input
+#define KEY_BASE 0x00000050 //Push buttons for manual control
+#define HEX3_HEX0_BASE 0x00000020 //7-segment displays to show temperature readings and settings
+#define HEX5_HEX4_BASE 0x00000030 //7-segment displays to show temperature readings and settings
+#define ADC_BASE 0x00000100 //ADC to read analog input (simulating our temperature sensor)
 //#define PWM_BASE 0x00000200  // Hypothetical PWM controller address(for full hardware implementation)
 
 // Global pointers for memory-mapped I/O
-void *virtual_base; //base pointer for our memory-mapped region.
-volatile int *led_ptr;
+void *virtual_base; //base pointer for our memory-mapped region
+//*_ptr are pointers to specific control registers
+volatile int *led_ptr; 
 volatile int *sw_ptr;
 volatile int *key_ptr;
 volatile int *HEX3_HEX0_ptr;
@@ -30,11 +31,11 @@ volatile int *ADC_ptr;
 volatile int *PWM_ptr;
 
 // Application state variables
-float current_temperature = 0.0; // variable to monitor the current temperature
-float threshold_temperature = 25.0;  // Default threshold in Celsius(we can change this upon our requirements)
-bool fan_state = false; 
+float current_temperature = 0.0; // variable to monitor the current temperature (stores the currently measured temperature value from ADC)
+float threshold_temperature = 25.0;  // user-configured temperature threshold at which the fan activates 
+bool fan_state = false; // boolean indicating whether the fan is on or off
 int fan_speed = 0;  // 0-100 percentage
-bool auto_mode = true; 
+bool auto_mode = true; // boolean indicating if the system is in automatic or manual mode
 
 // 7-segment display patterns for digits 0-9
 const unsigned char seven_seg_digits_decode[10] = {
@@ -50,17 +51,19 @@ void update_fan_speed(int temp, int threshold); // function for fan speed contro
 void update_displays(void); //function to update the 7-segment displays
 void process_user_input(void); //function to process user input
 
-void initialize_hardware(void) {
-    int fd;
+void initialize_hardware(void) { //function to set up all the hardware resources needed for the system
+    int fd; //A file descriptor is a small, non-negative integer used by the operating system to uniquely identify an open file or I/O resource (like a socket, pipe, or device)
+    // in our case it is used to identify the /dev/mem device file 
     
-    // Open /dev/mem device
-    if ((fd = open("/dev/mem", (O_RDWR | O_SYNC))) == -1) {
-        printf("ERROR: could not open /dev/mem\n");
+    // Open /dev/mem device (/dev/mm is special linux device file that gives user-space programs access to physical memory, basically gives us fast and direct control of FGPA peripherals)
+    if ((fd = open("/dev/mem", (O_RDWR | O_SYNC))) == -1) { //open /dev/mem in read/write mode
+        printf("ERROR: could not open /dev/mem\n"); 
         exit(1);
     }
     
     // Map physical memory into virtual address space
-    virtual_base = mmap(NULL, LW_BRIDGE_SPAN, (PROT_READ | PROT_WRITE), MAP_SHARED, fd, LW_BRIDGE_BASE);
+    //mmap() creates a memory-mapped region so the program can access FPGA peripherals using normal pointer operations
+    virtual_base = mmap(NULL, LW_BRIDGE_SPAN, (PROT_READ | PROT_WRITE), MAP_SHARED, fd, LW_BRIDGE_BASE); 
     if (virtual_base == MAP_FAILED) {
         printf("ERROR: mmap() failed\n");
         close(fd);
